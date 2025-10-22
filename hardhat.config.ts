@@ -1,5 +1,6 @@
 import type { HardhatUserConfig } from "hardhat/config";
 
+import "@nomicfoundation/hardhat-viem";
 import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
 import { configVariable } from "hardhat/config";
 
@@ -33,7 +34,7 @@ const config: HardhatUserConfig = {
     sepolia: {
       type: "http",
       chainType: "l1",
-      url: configVariable("SEPOLIA_RPC_URL"),
+      url: "http://127.0.0.1:8545",
       accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
     },
   },

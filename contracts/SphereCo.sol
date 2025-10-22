@@ -72,17 +72,42 @@ contract SphereCo is ReentrancyGuard {
         Refunded
     }
 
+    enum campaignPlatform {
+        Instagram,
+        TikTok,
+        YouTube,
+        Twitter,
+        LinkedIn
+    }
+
+    enum campaignContentType {
+        Posts,
+        Stories,
+        Reels,
+        Videos,
+        LiveStream
+    }
+
     // Campaign struct
     struct Campaign {
         string title;
         string description;
+
+        string brief;
+        string goal;
+        uint256 startDate;
+        uint256 endDate;
+        campaignPlatform[] targetPlatform;
+        campaignContentType[] contentTypes;
+        string targetAudience;
+        string guideline;
+
         uint256 reward;
         CampaignStatus status;
         uint256 createdAt;
         address createdBy;
         uint256 updatedAt;
         address updatedBy;
-        EnumerableSet.UintSet applicationList;
         address kolWorker;
     }
 
@@ -125,6 +150,7 @@ contract SphereCo is ReentrancyGuard {
         uint256 refundedAt;
     }
 
+    uint256[] campaignList;
 
     // User mapping configurations
     mapping (address => User) users;
@@ -132,6 +158,8 @@ contract SphereCo is ReentrancyGuard {
 
     // Campaign mapping configurations
     mapping (uint256 => Campaign) campaigns;
+    mapping (uint256 => uint256[]) campaignApplicants;
+    mapping(uint256 => mapping(uint256 => bool)) public isApplicantInCampaign;
     mapping (uint256 => bool) campaignExists;
     mapping (uint256 => uint256) campaignEscrow;
     mapping (uint256 => Payment) public campaignPayments;
@@ -335,9 +363,9 @@ contract SphereCo is ReentrancyGuard {
 
         emit UserUpdated(msg.sender, block.timestamp);
     }
-
-    function getAllCampaign() public {
-        // return campaigns;
+    
+    function getAllCampaignIds() public view returns (uint256[] memory) {
+        return campaignList;
     }
 
     function getCampaign(
@@ -345,6 +373,14 @@ contract SphereCo is ReentrancyGuard {
     ) public view existedCampaign(_campaignId) returns (
         string memory title,
         string memory description,
+        string memory brief,
+        string memory goal,
+        uint256 startDate,
+        uint256 endDate,
+        campaignPlatform[] memory targetPlatform,
+        campaignContentType[] memory contentTypes,
+        string memory targetAudience,
+        string memory guideline,
         uint256 reward,
         CampaignStatus status
     ) {
@@ -353,6 +389,14 @@ contract SphereCo is ReentrancyGuard {
         return (
             campaign.title,
             campaign.description,
+            campaign.brief,
+            campaign.goal,
+            campaign.startDate,
+            campaign.endDate,
+            campaign.targetPlatform,
+            campaign.contentTypes,
+            campaign.targetAudience,
+            campaign.guideline,
             campaign.reward,
             campaign.status
         );
@@ -360,7 +404,15 @@ contract SphereCo is ReentrancyGuard {
 
     function createCampaign(
         string memory _title,
-        string memory _description
+        string memory _description,
+        string memory _brief,
+        string memory _goal,
+        uint256 _startDate,
+        uint256 _endDate,
+        campaignPlatform _targetPlatform,
+        campaignContentType _contentTypes,
+        string memory _targetAudience,
+        string memory _guideline
     ) public payable nonReentrant onlyCampaigner returns (uint256) {
         require(bytes(_title).length > 0, "Title cannot be empty");
         require(bytes(_title).length <= 200, "Title too long");
@@ -371,10 +423,20 @@ contract SphereCo is ReentrancyGuard {
 
         campaigns[campaignId].title = _title;
         campaigns[campaignId].description = _description;
+        campaigns[campaignId].brief = _brief;
+        campaigns[campaignId].goal = _goal;
+        campaigns[campaignId].startDate = _startDate;
+        campaigns[campaignId].endDate = _endDate;
+        campaigns[campaignId].targetPlatform.push(_targetPlatform);
+        campaigns[campaignId].contentTypes.push(_contentTypes);
+        campaigns[campaignId].targetAudience = _targetAudience;
+        campaigns[campaignId].guideline = _guideline;
         campaigns[campaignId].reward = msg.value;
-        campaigns[campaignId].status = CampaignStatus.New;
+        campaigns[campaignId].status = CampaignStatus.Published;
         campaigns[campaignId].createdAt = block.timestamp;
         campaigns[campaignId].createdBy = msg.sender;
+
+        campaignList.push(campaignId);
 
         campaignExists[campaignId] = true;
 
@@ -419,24 +481,24 @@ contract SphereCo is ReentrancyGuard {
     }
 
     // Can be developed or not
-    function publishCampaign(
-        uint256 _campaignId
-    ) public existedCampaign(_campaignId) onlyCampaignCreator(_campaignId) returns (uint256) {        
-        require(
-            campaigns[_campaignId].status == CampaignStatus.New,
-            "Campaign already published"
-        );
+    // function publishCampaign(
+    //     uint256 _campaignId
+    // ) public existedCampaign(_campaignId) onlyCampaignCreator(_campaignId) returns (uint256) {        
+    //     require(
+    //         campaigns[_campaignId].status == CampaignStatus.New,
+    //         "Campaign already published"
+    //     );
         
-        campaigns[_campaignId].status = CampaignStatus.Published;
+    //     campaigns[_campaignId].status = CampaignStatus.Published;
 
-        emit CampaignPublished(
-            _campaignId,
-            msg.sender,
-            campaignEscrow[_campaignId]
-        );
+    //     emit CampaignPublished(
+    //         _campaignId,
+    //         msg.sender,
+    //         campaignEscrow[_campaignId]
+    //     );
 
-        return _campaignId;
-    }
+    //     return _campaignId;
+    // }
 
 
     function cancelCampaign(uint256 _campaignId) 
@@ -475,7 +537,9 @@ contract SphereCo is ReentrancyGuard {
 
         applicationExists[applicationId] = true;
 
-        campaigns[_campaignId].applicationList.add(applicationId);
+        campaignApplicants[_campaignId].push(applicationId);
+        
+        isApplicantInCampaign[_campaignId][applicationId] = true;
 
         emit ApplicationSubmitted(
             _campaignId,
@@ -484,6 +548,12 @@ contract SphereCo is ReentrancyGuard {
         );
 
         return applicationId;
+    }
+
+    function getAllApplication(
+        uint256 _campaignId
+    ) public view existedCampaign(_campaignId) returns (uint256[] memory) {
+        return campaignApplicants[_campaignId];
     }
 
     function getApplication(
@@ -497,7 +567,7 @@ contract SphereCo is ReentrancyGuard {
         uint256 _applicationId
     ) public existedCampaign(_campaignId) onlyKOL ApplicationExist(_applicationId) {
         require(
-            campaigns[_campaignId].applicationList.contains(_applicationId), 
+            isApplicantInCampaign[_campaignId][_applicationId], 
             "Application not registered in campaign!"
         );
         require(
@@ -523,8 +593,14 @@ contract SphereCo is ReentrancyGuard {
         Campaign storage campaignData = campaigns[_campaignId];
         Application storage applicationData = applications[_applicationId];
 
-        require(campaignData.applicationList.contains(_applicationId), "Application not registered in campaign!");
-        require(campaigns[_campaignId].status == CampaignStatus.Published, "Campaign's not published!");
+        require(
+            isApplicantInCampaign[_campaignId][_applicationId], 
+            "Application not registered in campaign!"
+        );
+        require(
+            campaigns[_campaignId].status == CampaignStatus.Published, 
+            "Campaign's not published!"
+        );
 
         campaignData.status = CampaignStatus.InProgress;
         campaignData.kolWorker = applicationData.applicantAddress;
