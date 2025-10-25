@@ -92,7 +92,6 @@ contract SphereCo is ReentrancyGuard {
     struct Campaign {
         string title;
         string description;
-
         string brief;
         string goal;
         uint256 startDate;
@@ -101,7 +100,6 @@ contract SphereCo is ReentrancyGuard {
         campaignContentType[] contentTypes;
         string targetAudience;
         string guideline;
-
         uint256 reward;
         CampaignStatus status;
         uint256 createdAt;
@@ -331,7 +329,7 @@ contract SphereCo is ReentrancyGuard {
         owner = msg.sender;
     }
 
-    function getUser() public view onlyRegisteredUser returns (User memory) {
+    function getUser() public view returns (User memory) {
         return users[msg.sender];
     }
 
@@ -339,7 +337,7 @@ contract SphereCo is ReentrancyGuard {
         string memory _name,
         string memory _summary,
         UserRole _role
-    ) public onlyUnregisteredUser {
+    ) public {
         require(bytes(_name).length > 0, "Name cannot be empty");
         require(bytes(_summary).length > 0, "Summary cannot be empty");
 
@@ -356,7 +354,7 @@ contract SphereCo is ReentrancyGuard {
         string memory _name,
         string memory _summary,
         UserRole _role
-    ) public onlyRegisteredUser {
+    ) public {
         users[msg.sender].name = _name;
         users[msg.sender].summary = _summary;
         users[msg.sender].role = _role;
@@ -413,13 +411,18 @@ contract SphereCo is ReentrancyGuard {
         campaignContentType _contentTypes,
         string memory _targetAudience,
         string memory _guideline
-    ) public payable nonReentrant onlyCampaigner returns (uint256) {
+    ) public payable nonReentrant returns (uint256) {
         require(bytes(_title).length > 0, "Title cannot be empty");
-        require(bytes(_title).length <= 200, "Title too long");
         require(bytes(_description).length > 0, "Description cannot be empty");
+        require(bytes(_brief).length > 0, "Brief cannot be empty");
+        require(bytes(_goal).length > 0, "Goal cannot be empty");
+        require(_startDate > block.timestamp, "Start date must be in the future");
+        require(_endDate > block.timestamp, "End date must be in the future");
+        require(bytes(_targetAudience).length > 0, "Target Audience cannot be empty");
+        require(bytes(_guideline).length > 0, "Guideline cannot be empty");
         require(msg.value > 0, "Reward must be positive");
         
-        uint256 campaignId = campaignIdCounter++;
+        uint256 campaignId = ++campaignIdCounter;
 
         campaigns[campaignId].title = _title;
         campaigns[campaignId].description = _description;
@@ -456,29 +459,29 @@ contract SphereCo is ReentrancyGuard {
         return campaignId;
     }
 
-    function editCampaign(
-        uint256 _campaignId,
-        string memory _title,
-        string memory _description
-    ) public existedCampaign(_campaignId) onlyCampaignCreator(_campaignId) returns (uint256) {
-        require(
-            campaigns[_campaignId].status == CampaignStatus.New,
-            "Can only edit draft campaigns"
-        );
+    // function editCampaign(
+    //     uint256 _campaignId,
+    //     string memory _title,
+    //     string memory _description
+    // ) public existedCampaign(_campaignId) onlyCampaignCreator(_campaignId) returns (uint256) {
+    //     require(
+    //         campaigns[_campaignId].status == CampaignStatus.New,
+    //         "Can only edit draft campaigns"
+    //     );
 
-        campaigns[_campaignId].title = _title;
-        campaigns[_campaignId].description = _description;
-        campaigns[_campaignId].updatedBy = msg.sender;
-        campaigns[_campaignId].updatedAt = block.timestamp;
+    //     campaigns[_campaignId].title = _title;
+    //     campaigns[_campaignId].description = _description;
+    //     campaigns[_campaignId].updatedBy = msg.sender;
+    //     campaigns[_campaignId].updatedAt = block.timestamp;
 
-        emit CampaignUpdated(
-            _campaignId,
-            msg.sender,
-            campaignEscrow[_campaignId]
-        );
+    //     emit CampaignUpdated(
+    //         _campaignId,
+    //         msg.sender,
+    //         campaignEscrow[_campaignId]
+    //     );
 
-        return _campaignId;
-    }
+    //     return _campaignId;
+    // }
 
     // Can be developed or not
     // function publishCampaign(
@@ -527,7 +530,7 @@ contract SphereCo is ReentrancyGuard {
     ) public existedCampaign(_campaignId) onlyKOL returns (uint256) {        
         require(campaigns[_campaignId].status == CampaignStatus.Published, "Campaign's not published!");
 
-        uint256 applicationId = applicationIdCounter++;
+        uint256 applicationId = ++applicationIdCounter;
 
         applications[applicationId].campaignId = _campaignId;
         applications[applicationId].applicantAddress = msg.sender;
@@ -639,7 +642,7 @@ contract SphereCo is ReentrancyGuard {
     ) public existedCampaign(_campaignId) onlyKOL onlyCampaignKOLWorker(_campaignId) {
         require(bytes(_data).length > 0, "Data cannot be empty"); 
 
-        uint256 draftWorkId = draftWorkIdCounter++;
+        uint256 draftWorkId = ++draftWorkIdCounter;
 
         draftWorks[draftWorkId].campaignId = _campaignId;
         draftWorks[draftWorkId].kolAddress = msg.sender;
@@ -696,7 +699,7 @@ contract SphereCo is ReentrancyGuard {
     ) public existedCampaign(_campaignId) onlyKOL onlyCampaignKOLWorker(_campaignId) {
         require(campaigns[_campaignId].status == CampaignStatus.ContentDrafted, "Campaign doesn't have any approved drafted content yet!");
 
-        uint256 publishedContentId = publishedContentIdCounter++;
+        uint256 publishedContentId = ++publishedContentIdCounter;
 
         publishedContents[publishedContentId].campaignId = _campaignId;
         publishedContents[publishedContentId].data = _data;
@@ -714,7 +717,7 @@ contract SphereCo is ReentrancyGuard {
     ) public existedCampaign(_campaignId) onlyKOL onlyCampaignKOLWorker(_campaignId) {
         require(campaigns[_campaignId].status == CampaignStatus.ContentPublished, "Campaign doesn't have any published content yet!");
 
-        uint256 contentAnalyticId = contentAnalyticIdCounter++;
+        uint256 contentAnalyticId = ++contentAnalyticIdCounter;
 
         contentAnalytics[contentAnalyticId].campaignId = _campaignId;
         contentAnalytics[contentAnalyticId].data = _data;
